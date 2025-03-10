@@ -82,6 +82,11 @@
             <button id="startButton" class="button">Запустить камеру</button>
         </div>
         
+        <div id="telegramWarning" style="display: none; margin-top: 20px;">
+            <p>Камера недоступна в Telegram. Пожалуйста, откройте этот сайт в другом браузере:</p>
+            <a href="https://ваш-сайт.com" target="_blank" class="button">Открыть в браузере</a>
+        </div>
+        
         <video id="video" autoplay playsinline style="display: none;"></video>
         <img id="photo" alt="Фото"/>
         
@@ -112,6 +117,11 @@
             debugElement.appendChild(entry);
             debugElement.scrollTop = debugElement.scrollHeight;
             console.log(message);
+        }
+        
+        // Проверка, является ли браузер Telegram
+        function isTelegramBrowser() {
+            return navigator.userAgent.includes("Telegram");
         }
         
         // Проверка, является ли изображение черным
@@ -264,6 +274,12 @@
         
         // Обработчики событий
         startButton.addEventListener('click', startCamera);
+        
+        // Проверка браузера Telegram
+        if (isTelegramBrowser()) {
+            document.getElementById('telegramWarning').style.display = 'block';
+            startButton.disabled = true;
+        }
         
         // Логируем информацию о системе
         log(`Браузер: ${navigator.userAgent}`);
