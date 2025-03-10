@@ -120,73 +120,85 @@
             console.log(message);
         }
         
-        // Инициализация камеры с обработкой ошибок
-        async function startCamera() {
-            try {
-                startButton.disabled = true;
-                statusElement.textContent = "Запрос доступа к камере...";
-                log("Запрашиваем доступ к камере");
-                
-                // Проверяем поддержку getUserMedia
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("Ваш браузер не поддерживает доступ к камере");
-                }
-                
-                // Пробуем сначала с низким разрешением для лучшей совместимости
-                const constraints = {
-                    audio: false,
-                    video: {
-                        facingMode: "user",
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }
-                };
-                
-                // Получаем поток с камеры
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                // Подключаем поток к видео
-                video.srcObject = stream;
-                video.style.display = "block";
-                
-                log("Поток камеры получен");
-                
-                // Ожидаем когда видео будет готово
-                await new Promise((resolve) => {
-                    video.onloadeddata = () => {
-                        log(`Видео загружено: ${video.videoWidth}x${video.videoHeight}`);
-                        resolve();
-                    };
-                    
-                    // Дополнительная защита от зависания
-                    setTimeout(resolve, 3000);
-                });
-                
-                // Проверяем, действительно ли видео загружено
-                if (video.videoWidth === 0) {
-                    log("Предупреждение: видеопоток не имеет размеров");
-                    // Продолжаем все равно, может проявиться позже
-                }
-                
-                statusElement.textContent = "Камера готова";
-                captureButton.style.display = "inline-block";
-                startButton.style.display = "none";
-                
-                // Проверяем работоспособность через 1 секунду
-                setTimeout(() => {
-                    if (video.videoWidth === 0) {
-                        log("Проверка: видео всё ещё без размеров");
-                    } else {
-                        log(`Проверка: видео OK (${video.videoWidth}x${video.videoHeight})`);
-                    }
-                }, 1000);
-                
-            } catch (error) {
-                statusElement.textContent = `Ошибка: ${error.message}`;
-                log(`Ошибка при инициализации камеры: ${error.message}`);
-                startButton.disabled = false;
-            }
+       // Замените функцию startCamera на эту улучшенную версию
+async function startCamera() {
+    try {
+        startButton.disabled = true;
+        statusElement.textContent = "Запрос доступа к камере...";
+        log("Запрашиваем доступ к камере");
+        
+        // Проверяем поддержку getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Ваш браузер не поддерживает доступ к камере");
         }
+        
+        // Пробуем с явным указанием задней камеры для мобильных устройств
+        let constraints = {
+            audio: false,
+            video: {
+                facingMode: "environment", // Пробуем заднюю камеру вместо "user"
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        };
+        
+        try {
+            // Пробуем получить поток с камеры
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+            log("Не удалось получить доступ к основной камере. Пробуем альтернативные настройки.");
+            // Пробуем альтернативные настройки
+            constraints = {
+                audio: false,
+                video: true // Упрощенный запрос - пусть браузер сам выберет камеру
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        }
+        
+        // Подключаем поток к видео
+        video.srcObject = stream;
+        video.style.display = "block";
+        
+        log("Поток камеры получен");
+        
+        // Делаем паузу перед запуском для лучшей совместимости
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Явно запускаем воспроизведение видео
+        try {
+            await video.play();
+            log("Видео воспроизведение запущено явно");
+        } catch (playError) {
+            log(`Ошибка при запуске видео: ${playError.message}`);
+        }
+        
+        // Ожидаем когда видео будет готово
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                log(`Метаданные видео загружены: ${video.videoWidth}x${video.videoHeight}`);
+                resolve();
+            };
+            
+            // Дополнительная защита от зависания
+            setTimeout(resolve, 3000);
+        });
+        
+        // Проверяем, действительно ли видео загружено
+        if (video.videoWidth === 0) {
+            log("Предупреждение: видеопоток не имеет размеров");
+            // Продолжаем все равно, может проявиться позже
+        }
+        
+        statusElement.textContent = "Камера готова";
+        captureButton.style.display = "inline-block";
+        startButton.style.display = "none";
+        
+    } catch (error) {
+        statusElement.textContent = `Ошибка: ${error.message}`;
+        log(`Ошибка при инициализации камеры: ${error.message}`);
+        startButton.disabled = false;
+    }
+}
         
         // Делаем снимок с видеопотока
         function takePhoto() {
