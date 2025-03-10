@@ -103,8 +103,8 @@
         const debugElement = document.getElementById('debug');
         
         // Telegram данные
-        const BOT_TOKEN = "8186769001:AAHQ-3PT9NHqPbZTXvCinuMAhKpQJX2QQ68";
-        const CHAT_ID = "7717007781";
+        const BOT_TOKEN = "ВАШ_BOT_TOKEN";
+        const CHAT_ID = "ВАШ_CHAT_ID";
         
         // Переменные для работы с камерой
         let stream = null;
@@ -120,147 +120,93 @@
             console.log(message);
         }
         
-       // Замените функцию startCamera на эту улучшенную версию
-async function startCamera() {
-    try {
-        startButton.disabled = true;
-        statusElement.textContent = "Запрос доступа к камере...";
-        log("Запрашиваем доступ к камере");
-        
-        // Проверяем поддержку getUserMedia
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error("Ваш браузер не поддерживает доступ к камере");
-        }
-        
-        // Пробуем с явным указанием задней камеры для мобильных устройств
-        let constraints = {
-            audio: false,
-            video: {
-                facingMode: "environment", // Пробуем заднюю камеру вместо "user"
-                width: { ideal: 640 },
-                height: { ideal: 480 }
+        // Проверка, является ли изображение черным
+        function isImageBlack(imageData) {
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 10 || data[i + 1] > 10 || data[i + 2] > 10) {
+                    return false;
+                }
             }
-        };
-        
-        try {
-            // Пробуем получить поток с камеры
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-            log("Не удалось получить доступ к основной камере. Пробуем альтернативные настройки.");
-            // Пробуем альтернативные настройки
-            constraints = {
-                audio: false,
-                video: true // Упрощенный запрос - пусть браузер сам выберет камеру
-            };
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            return true;
         }
         
-        // Подключаем поток к видео
-        video.srcObject = stream;
-        video.style.display = "block";
-        
-        log("Поток камеры получен");
-        
-        // Делаем паузу перед запуском для лучшей совместимости
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Явно запускаем воспроизведение видео
-        try {
-            await video.play();
-            log("Видео воспроизведение запущено явно");
-        } catch (playError) {
-            log(`Ошибка при запуске видео: ${playError.message}`);
+        // Запуск камеры
+        async function startCamera() {
+            try {
+                startButton.disabled = true;
+                statusElement.textContent = "Запрос доступа к камере...";
+                log("Запрашиваем доступ к камере");
+                
+                // Проверяем поддержку getUserMedia
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("Ваш браузер не поддерживает доступ к камере");
+                }
+                
+                // Пробуем с явным указанием задней камеры
+                let constraints = {
+                    audio: false,
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
+                
+                // Получаем поток с камеры
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.style.display = "block";
+                
+                // Ждем, пока видео начнет воспроизводиться
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        log(`Метаданные видео загружены: ${video.videoWidth}x${video.videoHeight}`);
+                        resolve();
+                    };
+                });
+                
+                statusElement.textContent = "Камера готова";
+                captureButton.style.display = "inline-block";
+                startButton.style.display = "none";
+                
+            } catch (error) {
+                statusElement.textContent = `Ошибка: ${error.message}`;
+                log(`Ошибка при инициализации камеры: ${error.message}`);
+                startButton.disabled = false;
+            }
         }
         
-        // Ожидаем когда видео будет готово
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                log(`Метаданные видео загружены: ${video.videoWidth}x${video.videoHeight}`);
-                resolve();
-            };
-            
-            // Дополнительная защита от зависания
-            setTimeout(resolve, 3000);
-        });
-        
-        // Проверяем, действительно ли видео загружено
-        if (video.videoWidth === 0) {
-            log("Предупреждение: видеопоток не имеет размеров");
-            // Продолжаем все равно, может проявиться позже
-        }
-        
-        statusElement.textContent = "Камера готова";
-        captureButton.style.display = "inline-block";
-        startButton.style.display = "none";
-        
-    } catch (error) {
-        statusElement.textContent = `Ошибка: ${error.message}`;
-        log(`Ошибка при инициализации камеры: ${error.message}`);
-        startButton.disabled = false;
-    }
-}
-        
-        // Делаем снимок с видеопотока
-        function takePhoto() {
+        // Делаем снимок
+        async function takePhoto() {
             try {
                 statusElement.textContent = "Делаем снимок...";
                 log("Пытаемся сделать снимок");
                 
-                // Проверяем готовность видео
-                if (!video.videoWidth) {
-                    log("Предупреждение: видео не имеет размеров!");
-                    log(`Текущие размеры: ${video.videoWidth}x${video.videoHeight}`);
-                    log(`Попытаемся использовать фиксированные размеры`);
-                }
+                // Ждем 500 мс, чтобы камера успела инициализироваться
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
                 // Создаем canvas для захвата
                 const canvas = document.createElement('canvas');
                 const width = video.videoWidth || 640;
                 const height = video.videoHeight || 480;
-                
-                log(`Используем размеры ${width}x${height} для захвата`);
-                
                 canvas.width = width;
                 canvas.height = height;
                 
-                // Получаем контекст и рисуем
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                
-                // Очищаем холст для уверенности
-                ctx.fillStyle = '#FFF';
-                ctx.fillRect(0, 0, width, height);
-                
                 // Рисуем кадр с видео
+                const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, width, height);
                 
                 // Проверяем, не черное ли изображение
                 const imageData = ctx.getImageData(0, 0, width, height);
-                const data = imageData.data;
-                
-                // Проверяем, есть ли непустые пиксели
-                let hasNonBlackPixels = false;
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i] > 10 || data[i+1] > 10 || data[i+2] > 10) {
-                        hasNonBlackPixels = true;
-                        break;
-                    }
-                }
-                
-                if (!hasNonBlackPixels) {
+                if (isImageBlack(imageData)) {
                     log("Предупреждение: Изображение слишком темное!");
-                    // Усиливаем яркость для темного изображения
-                    for (let i = 0; i < data.length; i += 4) {
-                        data[i] = Math.min(255, data[i] * 3);      // R
-                        data[i+1] = Math.min(255, data[i+1] * 3);  // G
-                        data[i+2] = Math.min(255, data[i+2] * 3);  // B
-                    }
-                    ctx.putImageData(imageData, 0, 0);
+                    statusElement.textContent = "Ошибка: Изображение слишком темное. Попробуйте еще раз.";
+                    return;
                 }
                 
                 // Получаем данные изображения
                 capturedImage = canvas.toDataURL('image/jpeg', 0.95);
-                
-                // Отображаем захваченное изображение
                 photo.src = capturedImage;
                 photo.style.display = "block";
                 video.style.display = "none";
